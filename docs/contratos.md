@@ -51,3 +51,34 @@ extensão mobile que valide senha, registre/revogue aparelho com o Service W07 e
 retorne a identidade do dispositivo antes de emitir JWT. A decisão precisa
 contemplar filas antigas e selfies de aparelhos revogados. Nada disso é simulado
 no cliente atual.
+
+
+## Selfie por presença no local vinculado
+
+A captura mobile exige selfie quando a posição estiver fora de todos os locais
+vinculados ao funcionário com alocação vigente na data civil da carga. A API W08
+não expõe um catálogo de todos os locais da empresa; somente as alocações do
+funcionário são consideradas. A escolha da alocação enviada no evento permanece
+explícita: estar dentro de outro local vinculado não muda a alocação da batida.
+
+A presença é confirmada apenas com posição válida, precisão até 100 metros e
+círculo de precisão inteiro dentro do raio de pelo menos um local. Ausência de
+posição, GPS indisponível, permissão negada, baixa precisão ou margem cruzando
+um limite exigem selfie. O cálculo Haversine usa raio terrestre de 6371008.8 m,
+igual ao Service do servidor, sem definir Aceita/PendenteAnalise/Recusada.
+`exige_selfie=true` mantém a foto obrigatória também dentro do local. A consulta
+de GPS ocorre mesmo com `ignorar_localizacao=true`, que permanece uma política
+de classificação do backend.
+
+O aviso de selfie permite cancelar antes de abrir a câmera. Sem captura bem
+sucedida não se salva evento na outbox. Foto e hash são preparados antes do
+commit local e seguem a fila independente já existente, após confirmação do
+ponto. Os metadados locais registram presença e motivo da exigência sem acrescentar
+campos ao payload HTTP nem alterar evidências antigas.
+
+A exigência condicional é do cliente. O backend atual recebe marcação e foto em
+requisições separadas e não aplica essa exigência na classificação. Em particular,
+selfie não converte ponto recusado por política de bloqueio em ponto aceito.
+Não houve alteração de rotas, migrations, cadastros ou políticas do banco nesta
+implementação. Uma regra obrigatória também para outros clientes precisará ser
+implementada no servidor.

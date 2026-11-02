@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/presentation/auth_view_model.dart';
 import '../../features/auth/presentation/login_view.dart';
 import '../../features/marcacoes/presentation/work_views.dart';
+import '../../features/marcacoes/domain/punch_event.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
@@ -34,7 +35,19 @@ final routerProvider = Provider<GoRouter>((ref) {
             WorkShell(path: state.uri.path, child: child),
         routes: [
           GoRoute(path: '/inicio', builder: (_, _) => const HomeView()),
-          GoRoute(path: '/registrar', builder: (_, _) => const CaptureView()),
+          GoRoute(
+            path: '/registrar',
+            builder: (_, state) => CaptureView(
+              initialType:
+                  PunchType.values
+                      .where(
+                        (type) =>
+                            type.wire == state.uri.queryParameters['tipo'],
+                      )
+                      .firstOrNull ??
+                  PunchType.entrada,
+            ),
+          ),
           GoRoute(path: '/historico', builder: (_, _) => const HistoryView()),
           GoRoute(path: '/fila', builder: (_, _) => const QueueView()),
           GoRoute(path: '/escala', builder: (_, _) => const ScheduleView()),

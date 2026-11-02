@@ -44,6 +44,10 @@ class _LoginViewState extends ConsumerState<LoginView> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      const Align(
+                        alignment: Alignment.centerRight,
+                        child: ThemeSettingsButton(),
+                      ),
                       Image.asset(
                         'assets/brand/logo.png',
                         height: 100,
@@ -55,7 +59,7 @@ class _LoginViewState extends ConsumerState<LoginView> {
                         style: Theme.of(context).textTheme.headlineMedium
                             ?.copyWith(
                               fontWeight: FontWeight.w700,
-                              color: Brand.navy,
+                              color: Theme.of(context).colorScheme.primary,
                             ),
                       ),
                       const SizedBox(height: 8),
@@ -194,8 +198,8 @@ class _LoginViewState extends ConsumerState<LoginView> {
                       Text(
                         runtime.config.origin,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Brand.muted,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                           fontSize: 12,
                         ),
                       ),

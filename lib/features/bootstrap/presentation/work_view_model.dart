@@ -167,7 +167,11 @@ class WorkViewModel extends Notifier<WorkState> {
     }
   }
 
-  Future<bool> capture(String allocationId, PunchType type) async {
+  Future<bool> capture(
+    String allocationId,
+    PunchType type, {
+    Future<bool> Function(String message)? confirmSelfie,
+  }) async {
     if (state.capturing) return false;
     final session = _session;
     final snapshot = state.snapshot;
@@ -182,6 +186,7 @@ class WorkViewModel extends Notifier<WorkState> {
         type: type,
         offlineSignal: state.offline,
         authorized: () => _authorized(session),
+        confirmSelfie: confirmSelfie,
       );
       if (!_disposed) {
         state = state.copy(

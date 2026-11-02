@@ -31,12 +31,13 @@ class AppRuntime {
     required this.installationUuid,
     this.recoveredPhotos = 0,
     ConnectionMonitor? connections,
+    EvidenceSensors? sensors,
   }) : connections = connections ?? PlatformConnectionMonitor() {
     auth = AuthRepository(api, storage);
     bootstrap = BootstrapRepository(db, api);
     outbox = OutboxRepository(db);
     worker = SyncWorker(outbox, api);
-    capture = CapturePunch(outbox, NativeEvidenceSensors(), photos);
+    capture = CapturePunch(outbox, sensors ?? NativeEvidenceSensors(), photos);
   }
   final AppConfig config;
   final AppDatabase db;

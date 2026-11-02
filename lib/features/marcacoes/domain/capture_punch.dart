@@ -9,6 +9,7 @@ import '../../auth/domain/mobile_session.dart';
 import '../../bootstrap/domain/bootstrap_snapshot.dart';
 import '../data/outbox_repository.dart';
 import 'punch_event.dart';
+import 'selfie_requirement.dart';
 
 class CapturePunch {
   CapturePunch(
@@ -30,6 +31,7 @@ class CapturePunch {
     required PunchType type,
     required bool offlineSignal,
     required bool Function() authorized,
+    Future<bool> Function(String message)? confirmSelfie,
   }) async {
     if (_busy) throw const AppFailure('Aguarde a captura atual.');
     _busy = true;
@@ -56,12 +58,34 @@ class CapturePunch {
       final allocation = allocations.single;
       final policy = allocation.setor.politicas;
       final eventId = const Uuid().v4();
-      final location = await sensors.location(
-        ignored: policy.ignorarLocalizacao,
+      // GPS tambem e necessario quando o setor dispensa geofencing no servidor:
+      // sem ele nao podemos dispensar a selfie por presenca em local vinculado.
+      final location = await sensors.location(ignored: false);
+      validate();
+      final selfie = SelfieRequirement.evaluate(
+        location: location,
+        workplaces: snapshot.data.alocacoes
+            .where(
+              (a) =>
+                  a.dataInicio.compareTo(snapshot.data.dataReferencia) <= 0 &&
+                  (a.dataFim == null ||
+                      a.dataFim!.compareTo(snapshot.data.dataReferencia) >= 0),
+            )
+            .map((a) => a.setor),
+        alwaysRequired: policy.exigeSelfie,
       );
       String? digest;
-      if (policy.exigeSelfie) {
+      if (selfie.required) {
+        if (confirmSelfie != null && !await confirmSelfie(selfie.message)) {
+          throw const AppFailure('Captura cancelada. O ponto não foi salvo.');
+        }
+        validate();
         final bytes = await sensors.selfie();
+        if (bytes.isEmpty) {
+          throw const AppFailure(
+            'A selfie não foi capturada. Tente novamente.',
+          );
+        }
         final directory = Directory(
           '${photoDirectory.path}/${sha256.convert(session.scope.codeUnits)}',
         );
@@ -104,6 +128,9 @@ class CapturePunch {
         },
         metadata: {
           'localizacao_status': location.status,
+          'presenca_local_vinculado': selfie.presence,
+          'selfie_obrigatoria': selfie.required,
+          'selfie_motivo': selfie.reason,
           'clock_offset_ms': snapshot.clock.offsetMs,
           'clock_sample_received_at': snapshot.clock.receivedAt
               .toIso8601String(),

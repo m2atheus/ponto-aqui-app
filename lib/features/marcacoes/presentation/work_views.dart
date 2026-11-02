@@ -77,13 +77,18 @@ class _WorkShellState extends ConsumerState<WorkShell>
           children: [
             Image.asset('assets/brand/symbol.png', width: 32, height: 32),
             const SizedBox(width: 10),
-            const Text(
-              'Ponto Aqui',
-              style: TextStyle(fontWeight: FontWeight.w700),
+            const Flexible(
+              child: Text(
+                'Ponto Aqui',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
             ),
           ],
         ),
         actions: [
+          const ThemeSettingsButton(),
           if (state.busy)
             const Padding(
               padding: EdgeInsets.all(18),
@@ -176,12 +181,20 @@ class _Notice extends StatelessWidget {
     width: double.infinity,
     padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(
-      color: const Color(0xFFFFF4DF),
+      color: Theme.of(context).colorScheme.tertiaryContainer,
       borderRadius: BorderRadius.circular(14),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [Text(text), ?action],
+      children: [
+        Text(
+          text,
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onTertiaryContainer,
+          ),
+        ),
+        ?action,
+      ],
     ),
   );
 }
@@ -206,101 +219,186 @@ class _Page extends StatelessWidget {
 
 class HomeView extends ConsumerWidget {
   const HomeView({super.key});
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(authProvider).asData?.value;
     if (session == null) return const SizedBox.shrink();
     final state = ref.watch(workProvider(session.scope));
     final snapshot = state.snapshot;
+    final shared = snapshot?.data.modoOperacao == ModoOperacao.relogio;
     final restriction = snapshot?.captureRestriction(DateTime.now().toUtc());
-    return _Page(
+    final colors = Theme.of(context).colorScheme;
+    final clock = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          'Olá, ${session.name.split(' ').first}',
+          shared ? 'Relógio de setor' : 'Olá, ${session.name.split(' ').first}',
           style: Theme.of(context).textTheme.headlineMedium
               ?.copyWith(fontWeight: FontWeight.bold),
         ),
+        const SizedBox(height: 8),
         Text(
-          snapshot?.data.funcionario == null
+          shared
+              ? snapshot?.data.setor?.nome ?? 'Setor compartilhado'
+              : snapshot?.data.funcionario == null
               ? session.email
               : '${snapshot!.data.funcionario!.nome} · Matrícula ${snapshot.data.funcionario!.matricula}',
-          style: const TextStyle(color: Brand.muted),
+          style: TextStyle(color: colors.onSurfaceVariant),
         ),
+        const SizedBox(height: 24),
         if (snapshot != null) _ClockCard(snapshot: snapshot),
-        if (state.message != null) _Notice(state.message!),
-        if (snapshot == null)
-          const _Notice(
-            'A primeira carga válida exige internet e aparelho autorizado. Toque em atualizar após o provisionamento.',
-          ),
-        if (restriction != null) _Notice(restriction),
-        if (snapshot?.data.modoOperacao == ModoOperacao.relogio)
-          _ClockMode(snapshot: snapshot!)
-        else ...[
-          if (snapshot != null)
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Seus vínculos',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 12),
-                    if (snapshot.data.alocacoes.isEmpty)
-                      Text(snapshot.data.mensagemStatus),
-                    for (final allocation in snapshot.data.alocacoes)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.location_on_outlined,
-                              color: Brand.teal,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    allocation.setor.nome,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  Text(
-                                    allocation.escala?.nome ??
-                                        'Sem escala cadastrada',
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          FilledButton.icon(
-            onPressed:
-                snapshot != null && restriction == null && session.canSend
-                ? () => context.go('/registrar')
-                : null,
-            icon: const Icon(Icons.touch_app_outlined),
-            label: const Text('Registrar ponto'),
-          ),
-          const Text(
-            'Toda marcação é salva primeiro no aparelho. A situação será definida pelo servidor.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Brand.muted),
-          ),
-        ],
       ],
     );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tablet = constraints.maxWidth >= 600;
+        final panel = Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: 16,
+          children: [
+            if (state.message != null) _Notice(state.message!),
+            if (snapshot == null)
+              const _Notice(
+                'A primeira carga válida exige internet e aparelho autorizado. Toque em atualizar após o provisionamento.',
+              ),
+            if (restriction != null && !shared) _Notice(restriction),
+            if (shared)
+              _ClockMode(snapshot: snapshot!)
+            else if (snapshot != null)
+              _PersonalPanel(
+                snapshot: snapshot,
+                tablet: tablet,
+                onRegister: restriction == null && session.canSend
+                    ? (type) => context.go('/registrar?tipo=${type.wire}')
+                    : null,
+              ),
+            Text(
+              'Offline: os registros são guardados neste aparelho. A confirmação e a análise dependem do servidor.',
+              style: TextStyle(color: colors.onSurfaceVariant),
+            ),
+          ],
+        );
+        return SingleChildScrollView(
+          padding: EdgeInsets.all(tablet ? 24 : 16),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1200),
+              child: tablet
+                  ? Row(
+                      key: const ValueKey('home-tablet'),
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(flex: 5, child: clock),
+                        const SizedBox(width: 24),
+                        Expanded(flex: 6, child: panel),
+                      ],
+                    )
+                  : Column(
+                      key: const ValueKey('home-mobile'),
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [clock, const SizedBox(height: 24), panel],
+                    ),
+            ),
+          ),
+        );
+      },
+    );
   }
+}
+
+class _PersonalPanel extends StatelessWidget {
+  const _PersonalPanel({
+    required this.snapshot,
+    required this.tablet,
+    this.onRegister,
+  });
+  final BootstrapSnapshot snapshot;
+  final bool tablet;
+  final ValueChanged<PunchType>? onRegister;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    spacing: 16,
+    children: [
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            spacing: 12,
+            children: [
+              Text(
+                'Seus vínculos',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              if (snapshot.data.alocacoes.isEmpty)
+                Text(snapshot.data.mensagemStatus),
+              for (final allocation in snapshot.data.alocacoes)
+                Row(
+                  children: [
+                    Icon(
+                      Icons.location_on_outlined,
+                      color: Theme.of(context).colorScheme.secondary,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            allocation.setor.nome,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          Text(
+                            allocation.escala?.nome ?? 'Sem escala cadastrada',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ),
+      ),
+      Text('Registrar ponto', style: Theme.of(context).textTheme.titleLarge),
+      LayoutBuilder(
+        builder: (context, constraints) {
+          final columns =
+              tablet &&
+                  constraints.maxWidth >= 400 &&
+                  MediaQuery.textScalerOf(context).scale(16) <= 24
+              ? 2
+              : 1;
+          final width = (constraints.maxWidth - 12 * (columns - 1)) / columns;
+          return Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              for (final type in PunchType.values)
+                SizedBox(
+                  width: columns == 1 ? double.infinity : width,
+                  child: FilledButton.icon(
+                    onPressed: onRegister == null
+                        ? null
+                        : () => onRegister!(type),
+                    icon: Icon(switch (type) {
+                      PunchType.entrada => Icons.login,
+                      PunchType.saida => Icons.logout,
+                      PunchType.inicioIntervalo => Icons.coffee_outlined,
+                      PunchType.fimIntervalo => Icons.work_outline,
+                    }),
+                    label: Text(type.label, textAlign: TextAlign.center),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    ],
+  );
 }
 
 class _ClockCard extends StatefulWidget {
@@ -334,39 +432,49 @@ class _ClockCardState extends State<_ClockCard> {
     return Container(
       padding: const EdgeInsets.all(26),
       decoration: BoxDecoration(
-        color: Brand.navy,
+        color: Theme.of(context).colorScheme.primaryContainer,
         borderRadius: BorderRadius.circular(24),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'HORÁRIO ESTIMADO DA EMPRESA',
             style: TextStyle(
-              color: Color(0xFFAFC9E1),
+              color: Theme.of(context).colorScheme.onPrimaryContainer,
               fontSize: 12,
               letterSpacing: 1,
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            _time(now),
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 54,
-              height: 1.1,
-              fontWeight: FontWeight.w600,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              _time(now),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onPrimaryContainer,
+                fontSize: 64,
+                height: 1.1,
+                fontWeight: FontWeight.w600,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
             ),
           ),
           const SizedBox(height: 12),
           Text(
             '${_date(now)}/${now.year} · ${snapshot.data.fusoHorario}',
-            style: const TextStyle(color: Colors.white),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onPrimaryContainer,
+            ),
           ),
           const SizedBox(height: 12),
           Text(
             'Carga de ${snapshot.data.dataReferencia} · Amostra ${_time(snapshot.clock.receivedAt.toLocal())}',
-            style: const TextStyle(color: Color(0xFFAFC9E1), fontSize: 12),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onPrimaryContainer,
+              fontSize: 12,
+            ),
           ),
         ],
       ),
@@ -375,14 +483,21 @@ class _ClockCardState extends State<_ClockCard> {
 }
 
 class CaptureView extends ConsumerStatefulWidget {
-  const CaptureView({super.key});
+  const CaptureView({super.key, this.initialType = PunchType.entrada});
+  final PunchType initialType;
   @override
   ConsumerState<CaptureView> createState() => _CaptureViewState();
 }
 
 class _CaptureViewState extends ConsumerState<CaptureView> {
   String? _allocation;
-  PunchType _type = PunchType.entrada;
+  late PunchType _type;
+  @override
+  void initState() {
+    super.initState();
+    _type = widget.initialType;
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = ref.watch(authProvider).asData?.value;
@@ -425,7 +540,10 @@ class _CaptureViewState extends ConsumerState<CaptureView> {
             child: ListTile(
               enabled: !state.capturing,
               selected: type == _type,
-              selectedTileColor: const Color(0xFFE7F5F3),
+              selectedTileColor: Theme.of(context)
+                  .colorScheme
+                  .secondaryContainer,
+              selectedColor: Theme.of(context).colorScheme.onSecondaryContainer,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
               ),
@@ -448,10 +566,8 @@ class _CaptureViewState extends ConsumerState<CaptureView> {
         if (selected != null)
           Text(
             selected.setor.politicas.exigeSelfie
-                ? 'Esta marcação exige selfie pela câmera. A localização será solicitada conforme a política do setor.'
-                : selected.setor.politicas.ignorarLocalizacao
-                ? 'A localização é dispensada pela política do setor.'
-                : 'A localização será capturada uma vez. A ausência ou baixa precisão será informada ao servidor.',
+                ? 'Este local exige selfie em todas as marcações. Vamos consultar sua localização e abrir a câmera.'
+                : 'Vamos consultar sua localização. Fora dos locais vinculados ao seu cadastro, ou quando o GPS não confirmar sua presença, será necessária uma selfie.',
           ),
         FilledButton.icon(
           onPressed:
@@ -463,7 +579,36 @@ class _CaptureViewState extends ConsumerState<CaptureView> {
               : () async {
                   final ok = await ref
                       .read(workProvider(session.scope).notifier)
-                      .capture(selected.id, _type);
+                      .capture(
+                        selected.id,
+                        _type,
+                        confirmSelfie: (message) async {
+                          if (!context.mounted) return false;
+                          return await showDialog<bool>(
+                                context: context,
+                                builder: (dialogContext) => AlertDialog(
+                                  title: const Text('Selfie necessária'),
+                                  content: Text(message),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(dialogContext, false),
+                                      child: const Text('Cancelar'),
+                                    ),
+                                    FilledButton.icon(
+                                      onPressed: () =>
+                                          Navigator.pop(dialogContext, true),
+                                      icon: const Icon(
+                                        Icons.camera_alt_outlined,
+                                      ),
+                                      label: const Text('Tirar selfie'),
+                                    ),
+                                  ],
+                                ),
+                              ) ??
+                              false;
+                        },
+                      );
                   if (context.mounted && ok) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
@@ -623,7 +768,7 @@ class _EventCard extends StatelessWidget {
               children: [
                 Icon(
                   confirmed ? Icons.cloud_done_outlined : Icons.phone_android,
-                  color: Brand.teal,
+                  color: Theme.of(context).colorScheme.secondary,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -650,7 +795,10 @@ class _EventCard extends StatelessWidget {
             if (metadata['localizacao_status'] != null)
               Text(
                 'Localização: ${(metadata['localizacao_status'] as String).replaceAll('_', ' ')}',
-                style: const TextStyle(fontSize: 12, color: Brand.muted),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
             if (row.lastError != null)
               Padding(
@@ -662,7 +810,10 @@ class _EventCard extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
                   'Última tentativa: ${_date(DateTime.fromMillisecondsSinceEpoch(row.lastAttemptMs!))} ${_time(DateTime.fromMillisecondsSinceEpoch(row.lastAttemptMs!))} · ${row.attempts} envio(s)',
-                  style: const TextStyle(fontSize: 12, color: Brand.muted),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
             ExpansionTile(
@@ -783,13 +934,39 @@ class _ClockMode extends StatelessWidget {
           const Text(
             'A carga do setor está disponível. Registrar pontos da equipe depende de autorização adicional no servidor.',
           ),
-          for (final employee in snapshot.data.funcionarios)
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.person_outline),
-              title: Text(employee.funcionario.nome),
-              subtitle: Text('Matrícula ${employee.funcionario.matricula}'),
-            ),
+          const SizedBox(height: 16),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final columns =
+                  constraints.maxWidth >= 440 &&
+                      MediaQuery.textScalerOf(context).scale(16) <= 24
+                  ? 2
+                  : 1;
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  for (final employee in snapshot.data.funcionarios)
+                    SizedBox(
+                      width:
+                          (constraints.maxWidth - 12 * (columns - 1)) / columns,
+                      child: Card(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHigh,
+                        child: ListTile(
+                          leading: const Icon(Icons.person_outline),
+                          title: Text(employee.funcionario.nome),
+                          subtitle: Text(
+                            'Matrícula ${employee.funcionario.matricula}',
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
         ],
       ),
     ),

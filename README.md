@@ -43,6 +43,21 @@ A estrutura iOS foi gerada com Flutter. Câmera e localização em uso têm text
 de permissão em `Info.plist`. A compilação e os sensores iOS precisam ser
 verificados em macOS/aparelho; não são executáveis no ambiente Windows atual.
 
+## Aparência e tamanhos de tela
+
+O aplicativo acompanha o tema do sistema por padrão. O botão **Configurações de
+aparência**, disponível no login e na barra superior, permite forçar tema claro
+ou escuro, ou voltar ao sistema. A preferência é mantida no aparelho, inclusive
+após sair da conta. Falha ao salvar a preferência não impede a troca na sessão.
+
+A Home usa uma coluna abaixo de 600 pixels lógicos e separa relógio e painel de
+ações a partir de 600. Os botões pessoais ocupam a largura disponível no celular;
+no tablet, podem formar duas colunas no painel lateral. Fonte ampliada reduz a
+quantidade de colunas e a página continua rolável em telas baixas. A escolha de
+Entrada, Saída ou Intervalo abre a confirmação do tipo correspondente. O modo
+Relógio mantém seu catálogo de funcionários, sem simular envio coletivo ausente
+no backend.
+
 ## Primeiro acesso real
 
 1. O RH cria/vincula a conta de funcionário no backend.
@@ -79,8 +94,10 @@ de teste, após validar o JWT emitido pelo login HTTP. Não aplica migrations,
 não cria contas administrativas e não revoga aparelhos de outros usuários.
 A carga mobile é verificada novamente pela API após esse vínculo.
 
-Os recursos de teste têm nomes próprios, alocação por 30 dias, selfie dispensada
-e localização ignorada somente no setor novo. Recursos anteriores são preservados.
+Os recursos de teste têm nomes próprios, alocação por 30 dias, `exige_selfie=false`
+e localização ignorada pelo servidor somente no setor novo. A regra mobile de
+selfie fora dos locais vinculados continua valendo nesse setor. Recursos anteriores
+são preservados.
 Uma falha pode deixar cadastros parciais; os IDs ficam no arquivo de estado,
 sem exclusão automática nem redefinição de senhas existentes.
 
@@ -99,10 +116,22 @@ sem exclusão automática nem redefinição de senhas existentes.
 - Logout preserva a fila e os arquivos. Outra conta, empresa, API ou aparelho
   não consulta nem envia evidências do escopo anterior.
 - A marcação pode ser `Aceita`, `PendenteAnalise` ou `Recusada` no servidor.
-  Todas podem estar confirmadas no transporte. O app nunca decide geofencing.
+  Todas podem estar confirmadas no transporte. A classificação final é do servidor;
+  o cálculo local de perímetro decide somente a necessidade da selfie.
+- O app consulta o GPS para verificar presença em qualquer local das alocações
+  vigentes do funcionário. Fora desses locais, a selfie é obrigatória. Se a
+  localização não puder ser confirmada, também exige selfie. `exige_selfie=true`
+  mantém a obrigatoriedade mesmo dentro do local.
+- A foto só é dispensada se a posição e sua margem de precisão couberem em um
+  dos raios cadastrados, com precisão de até 100 metros. A regra funciona com a
+  carga offline válida e não consulta locais de outras empresas ou funcionários.
 - Permissão negada, GPS desligado e timeout viram evidência local de ausência;
-  nenhuma coordenada artificial é criada. `ignorar_localizacao` dispensa o GPS.
-- Fotos exigidas são capturadas pela câmera, orientadas/redimensionadas e
+  nenhuma coordenada artificial é criada. `ignorar_localizacao` continua sendo
+  uma política de classificação do servidor; não dispensa a consulta do GPS
+  necessária para decidir a selfie no app.
+- Um aviso explica a exigência antes de abrir a câmera frontal. Cancelar o aviso,
+  negar a câmera ou cancelar a foto impede salvar a marcação. Fotos exigidas são
+  capturadas pela câmera, orientadas/redimensionadas e
   preparadas em JPEG uma vez, com SHA-256. Reenvios usam os mesmos bytes privados.
 - A foto só é enviada após confirmação da marcação. Upload recusado não recria
   nem apaga a marcação. Fotos recuperadas de uma câmera interrompida são guardadas
@@ -161,8 +190,10 @@ incrementar `schemaVersion`. Não apague o banco para resolver incompatibilidade
 - O histórico é local mais os últimos 20 registros/7 dias da carga; não é um
   espelho completo. A escala é previsão da carga disponível, sem apuração local
   de feriados, afastamentos ou conflitos definitivos.
-- `exige_selfie` é aplicado na captura mobile. A API W09 não garante completude
-  de selfie ao classificar uma marcação.
+- A exigência de selfie por política do setor ou presença fora dos locais é
+  aplicada na captura mobile. A API W09 não garante completude de selfie ao
+  classificar uma marcação. Uma selfie não altera a política do setor: a API
+  ainda pode recusar a batida fora do perímetro quando configurada para bloquear.
 - Não há refresh fictício, acesso Supabase direto, edição/exclusão de pontos,
   substituição de selfies ou alteração de contratos públicos.
 
