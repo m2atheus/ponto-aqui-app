@@ -1,0 +1,196 @@
+# Ponto Aqui — aplicativo mobile
+
+Flutter Android/iOS integrado exclusivamente à API Flask de `../Ponto-aqui`.
+O fluxo pessoal usa aparelho previamente cadastrado, grava evidências primeiro
+em SQLite e sincroniza marcações e selfies em filas independentes.
+
+## Executar
+
+Ambiente validado: Flutter 3.47.0, Dart 3.13.0. As versões resolvidas estão em
+`pubspec.lock`; os pacotes foram conferidos na documentação dos mantenedores.
+
+```powershell
+flutter pub get
+flutter run --dart-define=API_BASE_URL=https://SUA-API
+```
+
+Informe somente a origem Flask, sem `/api/web`, `/api/mobile` ou `/api/v1`.
+Nenhuma senha, chave Supabase ou configuração de banco pertence ao aplicativo.
+Sem configuração válida, a inicialização apresenta um estado de indisponibilidade.
+
+Android emulador com Flask local:
+
+```powershell
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:5000 --dart-define=ALLOW_DEV_HTTP=true
+```
+
+O Flask precisa estar acessível nessa porta. Em aparelho físico, use HTTPS ou
+um endereço de desenvolvimento acessível na rede. Para HTTP em aparelho físico,
+adicione **somente o host de desenvolvimento** ao XML em
+`android/app/src/debug/res/xml/network_security_config.xml` e habilite a flag.
+Produção rejeita HTTP mesmo com essa flag. O manifesto principal bloqueia tráfego
+em texto claro; a exceção de rede existe exclusivamente no build debug.
+
+No macOS, configure assinatura/equipe em `ios/Runner.xcworkspace` e execute:
+
+```sh
+flutter pub get
+flutter run -d ID_DO_IPHONE --dart-define=API_BASE_URL=https://SUA-API
+flutter build ios --no-codesign --dart-define=API_BASE_URL=https://SUA-API
+```
+
+A estrutura iOS foi gerada com Flutter. Câmera e localização em uso têm textos
+de permissão em `Info.plist`. A compilação e os sensores iOS precisam ser
+verificados em macOS/aparelho; não são executáveis no ambiente Windows atual.
+
+## Primeiro acesso real
+
+1. O RH cria/vincula a conta de funcionário no backend.
+2. Abra o app e copie o identificador da instalação mostrado no login.
+3. Um operador confiável cadastra um dispositivo pessoal ativo na empresa/conta,
+   usando esse identificador em `device_uuid`.
+4. O operador fornece o **ID da linha do dispositivo** (`dispositivo_id`).
+5. Entre com e-mail, senha e esse ID. O login envia somente os campos existentes.
+6. A primeira carga exige rede e valida o UUID da instalação contra o aparelho
+   autorizado pelo JWT. Um ID legado sozinho não basta quando o UUID diverge.
+
+O aplicativo não cria aparelhos, tokens ou vínculos fictícios. O login atual
+não chama `registrar_login_pessoal`; cadastro/revogação automática ainda exige
+um contrato de backend aprovado e implementado. O código do servidor e o painel
+administrativo não foram modificados.
+
+## Operação e políticas explícitas
+
+Para criar uma conta real de teste usando uma conta RH existente, há um
+utilitário interativo:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/criar_usuario_teste.ps1 -DeviceUuid UUID_COPIADO_DO_APP
+```
+
+O utilitário pede a senha RH em uma janela de credenciais, usa somente a API
+local `http://127.0.0.1:5000` para criar funcionário/acesso/setor/escala/alocação,
+e mostra as credenciais da **nova** conta no terminal. Não salva senha RH nem JWT.
+O estado do processo, sem senhas/tokens, fica em `.local/usuario-teste-status.json`.
+
+Como a API ainda não tem provisionamento HTTP, o helper Python usa a factory e
+o Service de dispositivos do backend para vincular exclusivamente o novo usuário
+de teste, após validar o JWT emitido pelo login HTTP. Não aplica migrations,
+não cria contas administrativas e não revoga aparelhos de outros usuários.
+A carga mobile é verificada novamente pela API após esse vínculo.
+
+Os recursos de teste têm nomes próprios, alocação por 30 dias, selfie dispensada
+e localização ignorada somente no setor novo. Recursos anteriores são preservados.
+Uma falha pode deixar cadastros parciais; os IDs ficam no arquivo de estado,
+sem exclusão automática nem redefinição de senhas existentes.
+
+- Cada marcação recebe um UUID v4 e é confirmada localmente somente após commit.
+- Hora original com offset, desvio, posição e flag offline não mudam no retry.
+- `registrado_offline` congela o sinal de conectividade disponível na captura.
+  Ele não afirma que a API estava acessível: Wi-Fi também pode estar sem internet.
+- Offset = UTC do servidor menos UTC do aparelho no recebimento. Positivo
+  significa aparelho atrasado. O W09 usa esse mesmo sinal e `offsetMs ~/ 1000`,
+  truncando em direção a zero. A estimativa inclui latência e não altera o sistema.
+- A captura exige carga com a data civil atual da empresa e amostra de relógio
+  com idade entre zero e 24 horas. Sem amostra/carga, não há captura liberada.
+- Uma sessão previamente validada pode operar offline dentro dessa política,
+  inclusive sem renovar um JWT vencido. Uma resposta explícita 401/403 bloqueia
+  novas capturas/envios até reautenticação. A aprovação futura não é garantida.
+- Logout preserva a fila e os arquivos. Outra conta, empresa, API ou aparelho
+  não consulta nem envia evidências do escopo anterior.
+- A marcação pode ser `Aceita`, `PendenteAnalise` ou `Recusada` no servidor.
+  Todas podem estar confirmadas no transporte. O app nunca decide geofencing.
+- Permissão negada, GPS desligado e timeout viram evidência local de ausência;
+  nenhuma coordenada artificial é criada. `ignorar_localizacao` dispensa o GPS.
+- Fotos exigidas são capturadas pela câmera, orientadas/redimensionadas e
+  preparadas em JPEG uma vez, com SHA-256. Reenvios usam os mesmos bytes privados.
+- A foto só é enviada após confirmação da marcação. Upload recusado não recria
+  nem apaga a marcação. Fotos recuperadas de uma câmera interrompida são guardadas
+  separadamente e nunca vinculadas a uma marcação inventada.
+- Não há exclusão automática de evidências, incluindo fotos confirmadas, nesta
+  versão. A retenção local é contínua; política de expurgo deve ser acordada com a
+  empresa antes de adicionar limpeza. Evidências pendentes nunca expiram no app.
+- JWT e contexto de sessão ficam em armazenamento seguro do sistema. Banco e
+  fotos ficam no diretório privado persistente do app; SQLite não usa SQLCipher.
+  Android desabilita backup automático. Não há logs de senha/JWT.
+- Sincronização ocorre na abertura, retorno ao foreground, reconexão, captura e
+  comando manual. Em foreground, um timer verifica retries vencidos a cada 15s.
+  Não há garantia de execução com o app encerrado.
+
+## Transporte
+
+Lotes de até 50 eventos; até três lotes por execução. A fila usa lease de dois
+minutos por lote e recupera leases vencidos após interrupção. Selfies são
+reivindicadas uma a uma, até três por execução. Todos os retries preservam bytes
+e UUIDs. Há backoff exponencial de até 15 minutos com jitter; a ação manual
+antecipa somente tentativas recuperáveis.
+
+Uma resposta parcial confirma somente os itens coerentes com UUID, índice,
+status, conteúdo original e `persistida:true`. 404/409/422 por item requerem ação
+e não entram em loop. 401/403 suspendem a sessão. Timeout, 503 e respostas
+inconsistentes conservam a evidência na fila.
+
+## Arquitetura e banco
+
+`lib/app` compõe dependências, tema e rotas protegidas. `core` contém configuração,
+HTTP, armazenamento seguro, SQLite, relógio e sensores. `features` separa
+autenticação, bootstrap, marcações, sincronização e escala. Views não executam
+Dio/SQL; ViewModels expõem estados e ações. Captura e sincronização coordenam
+repositórios e serviços testáveis.
+
+O Drift contém snapshots por escopo e a outbox. A evidência é separada dos campos
+de transporte, com trigger SQLite impedindo alterações de payload/metadados/
+arquivo após inserção. Confirmações de cada resposta são aplicadas em transação.
+
+O arquivo gerado está incluído no projeto. Após alterar o schema:
+
+```powershell
+dart run build_runner build
+```
+
+Ao mudar schema de uma versão distribuída, acrescente migração e testes antes de
+incrementar `schemaVersion`. Não apague o banco para resolver incompatibilidades.
+
+## Limites da API
+
+- O modo relógio exibe a carga quando há sessão de setor válida, mas não oferece
+  marcação coletiva nem saída autenticada por gestor: esses contratos não existem.
+- O login público atual não emite um token completo de setor.
+- Uma alocação encerrada no dia anterior pode não estar na carga atual mesmo
+  havendo madrugada de turno. O app não inventa um vínculo para contornar isso.
+- O histórico é local mais os últimos 20 registros/7 dias da carga; não é um
+  espelho completo. A escala é previsão da carga disponível, sem apuração local
+  de feriados, afastamentos ou conflitos definitivos.
+- `exige_selfie` é aplicado na captura mobile. A API W09 não garante completude
+  de selfie ao classificar uma marcação.
+- Não há refresh fictício, acesso Supabase direto, edição/exclusão de pontos,
+  substituição de selfies ou alteração de contratos públicos.
+
+Consulte [contratos e decisões](docs/contratos.md).
+
+## Verificar e compilar
+
+```powershell
+flutter analyze
+flutter test --reporter expanded
+flutter build apk --debug --dart-define=API_BASE_URL=https://SUA-API
+```
+
+Os testes usam os dois exemplos W08 do backend, HTTP falso e SQLite real,
+incluindo reabertura de arquivo, rollback, concorrência, isolamento, 207,
+respostas incompletas, timeout depois do commit, duplicatas, permissões e selfie.
+Eles não precisam de Flask, `.env`, Supabase ou credenciais reais.
+
+A assinatura release continua sendo responsabilidade da distribuição. Não
+publique uma compilação com a chave debug gerada pelo template Flutter.
+
+Para gerar um APK de validação sem backend, use a origem reservada
+`https://api.example.invalid`. Para uso com a empresa, compile com a URL real.
+O fluxo completo foi testado com HTTP falso; câmera/GPS e
+integração com uma API implantada ainda exigem validação em aparelho real.
+
+Referências: [Flutter/MVVM](https://docs.flutter.dev/app-architecture/guide),
+[offline-first](https://docs.flutter.dev/app-architecture/design-patterns/offline-first),
+[Drift](https://drift.simonbinder.eu/dart_api/transactions/),
+[Riverpod](https://riverpod.dev/docs/introduction/getting_started),
+[pacotes e versões resolvidas](pubspec.lock).
