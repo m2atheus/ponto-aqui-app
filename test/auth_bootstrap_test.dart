@@ -40,7 +40,7 @@ void main() {
           expect(request.data, {
             'email': session.email,
             'senha': 'test-password',
-            'dispositivo_id': session.deviceId,
+            'device_uuid': session.deviceUuid,
           });
           expect(request.headers.containsKey('Authorization'), isFalse);
           return FakeAdapter.json({
@@ -55,11 +55,7 @@ void main() {
       });
       final storage = MemorySessionStorage();
       final repository = AuthRepository(fakeApi(adapter), storage);
-      final signedIn = await repository.login(
-        session.email,
-        'test-password',
-        session.deviceId,
-      );
+      final signedIn = await repository.login(session.email, 'test-password');
       expect(signedIn.scope, session.scope);
       expect(storage.value!.scope, session.scope);
       expect(adapter.requests, hasLength(2));

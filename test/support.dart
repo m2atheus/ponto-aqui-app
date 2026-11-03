@@ -13,9 +13,9 @@ import 'package:ponto_aqui_app/features/auth/domain/mobile_session.dart';
 import 'package:ponto_aqui_app/features/marcacoes/domain/punch_event.dart';
 import 'package:uuid/uuid.dart';
 
-const session = MobileSession(
+final session = MobileSession(
   origin: 'https://api.example.test',
-  token: 'test-token',
+  token: testJwt(),
   userId: '22222222-2222-4222-8222-222222222222',
   companyId: '99999999-9999-4999-8999-999999999999',
   name: 'Ana Silva',
@@ -24,6 +24,13 @@ const session = MobileSession(
   deviceId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   deviceUuid: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
 );
+
+// JWT ficticio somente para transporte simulado: nao e aceito por uma API real.
+String testJwt({Map<String, dynamic> overrides = const {}}) {
+  String encode(Object value) =>
+      base64Url.encode(utf8.encode(jsonEncode(value))).replaceAll('=', '');
+  return '${encode({'alg': 'HS256', 'typ': 'JWT'})}.${encode({'sub': '22222222-2222-4222-8222-222222222222', 'empresa_id': '99999999-9999-4999-8999-999999999999', 'role': 'FUNCIONARIO', 'dispositivo_id': 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'device_uuid': 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', ...overrides})}.test-signature';
+}
 
 Map<String, dynamic> profile() => {
   'id': session.userId,

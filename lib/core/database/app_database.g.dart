@@ -1405,6 +1405,222 @@ class OutboxEventsCompanion extends UpdateCompanion<OutboxEvent> {
   }
 }
 
+class $SelectedContextsTable extends SelectedContexts
+    with TableInfo<$SelectedContextsTable, SelectedContext> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SelectedContextsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _scopeMeta = const VerificationMeta('scope');
+  @override
+  late final GeneratedColumn<String> scope = GeneratedColumn<String>(
+    'scope',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sectorIdMeta = const VerificationMeta(
+    'sectorId',
+  );
+  @override
+  late final GeneratedColumn<String> sectorId = GeneratedColumn<String>(
+    'sector_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [scope, sectorId];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'selected_contexts';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SelectedContext> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('scope')) {
+      context.handle(
+        _scopeMeta,
+        scope.isAcceptableOrUnknown(data['scope']!, _scopeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_scopeMeta);
+    }
+    if (data.containsKey('sector_id')) {
+      context.handle(
+        _sectorIdMeta,
+        sectorId.isAcceptableOrUnknown(data['sector_id']!, _sectorIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sectorIdMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {scope};
+  @override
+  SelectedContext map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SelectedContext(
+      scope: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}scope'],
+      )!,
+      sectorId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sector_id'],
+      )!,
+    );
+  }
+
+  @override
+  $SelectedContextsTable createAlias(String alias) {
+    return $SelectedContextsTable(attachedDatabase, alias);
+  }
+}
+
+class SelectedContext extends DataClass implements Insertable<SelectedContext> {
+  final String scope;
+  final String sectorId;
+  const SelectedContext({required this.scope, required this.sectorId});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['scope'] = Variable<String>(scope);
+    map['sector_id'] = Variable<String>(sectorId);
+    return map;
+  }
+
+  SelectedContextsCompanion toCompanion(bool nullToAbsent) {
+    return SelectedContextsCompanion(
+      scope: Value(scope),
+      sectorId: Value(sectorId),
+    );
+  }
+
+  factory SelectedContext.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SelectedContext(
+      scope: serializer.fromJson<String>(json['scope']),
+      sectorId: serializer.fromJson<String>(json['sectorId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'scope': serializer.toJson<String>(scope),
+      'sectorId': serializer.toJson<String>(sectorId),
+    };
+  }
+
+  SelectedContext copyWith({String? scope, String? sectorId}) =>
+      SelectedContext(
+        scope: scope ?? this.scope,
+        sectorId: sectorId ?? this.sectorId,
+      );
+  SelectedContext copyWithCompanion(SelectedContextsCompanion data) {
+    return SelectedContext(
+      scope: data.scope.present ? data.scope.value : this.scope,
+      sectorId: data.sectorId.present ? data.sectorId.value : this.sectorId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SelectedContext(')
+          ..write('scope: $scope, ')
+          ..write('sectorId: $sectorId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(scope, sectorId);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SelectedContext &&
+          other.scope == this.scope &&
+          other.sectorId == this.sectorId);
+}
+
+class SelectedContextsCompanion extends UpdateCompanion<SelectedContext> {
+  final Value<String> scope;
+  final Value<String> sectorId;
+  final Value<int> rowid;
+  const SelectedContextsCompanion({
+    this.scope = const Value.absent(),
+    this.sectorId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SelectedContextsCompanion.insert({
+    required String scope,
+    required String sectorId,
+    this.rowid = const Value.absent(),
+  }) : scope = Value(scope),
+       sectorId = Value(sectorId);
+  static Insertable<SelectedContext> custom({
+    Expression<String>? scope,
+    Expression<String>? sectorId,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (scope != null) 'scope': scope,
+      if (sectorId != null) 'sector_id': sectorId,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SelectedContextsCompanion copyWith({
+    Value<String>? scope,
+    Value<String>? sectorId,
+    Value<int>? rowid,
+  }) {
+    return SelectedContextsCompanion(
+      scope: scope ?? this.scope,
+      sectorId: sectorId ?? this.sectorId,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (scope.present) {
+      map['scope'] = Variable<String>(scope.value);
+    }
+    if (sectorId.present) {
+      map['sector_id'] = Variable<String>(sectorId.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SelectedContextsCompanion(')
+          ..write('scope: $scope, ')
+          ..write('sectorId: $sectorId, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -1412,6 +1628,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     this,
   );
   late final $OutboxEventsTable outboxEvents = $OutboxEventsTable(this);
+  late final $SelectedContextsTable selectedContexts = $SelectedContextsTable(
+    this,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -1419,6 +1638,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     bootstrapCaches,
     outboxEvents,
+    selectedContexts,
   ];
 }
 
@@ -2113,6 +2333,164 @@ typedef $$OutboxEventsTableProcessedTableManager =
       OutboxEvent,
       PrefetchHooks Function()
     >;
+typedef $$SelectedContextsTableCreateCompanionBuilder =
+    SelectedContextsCompanion Function({
+      required String scope,
+      required String sectorId,
+      Value<int> rowid,
+    });
+typedef $$SelectedContextsTableUpdateCompanionBuilder =
+    SelectedContextsCompanion Function({
+      Value<String> scope,
+      Value<String> sectorId,
+      Value<int> rowid,
+    });
+
+class $$SelectedContextsTableFilterComposer
+    extends Composer<_$AppDatabase, $SelectedContextsTable> {
+  $$SelectedContextsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get scope => $composableBuilder(
+    column: $table.scope,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sectorId => $composableBuilder(
+    column: $table.sectorId,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SelectedContextsTableOrderingComposer
+    extends Composer<_$AppDatabase, $SelectedContextsTable> {
+  $$SelectedContextsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get scope => $composableBuilder(
+    column: $table.scope,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sectorId => $composableBuilder(
+    column: $table.sectorId,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SelectedContextsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SelectedContextsTable> {
+  $$SelectedContextsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get scope =>
+      $composableBuilder(column: $table.scope, builder: (column) => column);
+
+  GeneratedColumn<String> get sectorId =>
+      $composableBuilder(column: $table.sectorId, builder: (column) => column);
+}
+
+class $$SelectedContextsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SelectedContextsTable,
+          SelectedContext,
+          $$SelectedContextsTableFilterComposer,
+          $$SelectedContextsTableOrderingComposer,
+          $$SelectedContextsTableAnnotationComposer,
+          $$SelectedContextsTableCreateCompanionBuilder,
+          $$SelectedContextsTableUpdateCompanionBuilder,
+          (
+            SelectedContext,
+            BaseReferences<
+              _$AppDatabase,
+              $SelectedContextsTable,
+              SelectedContext
+            >,
+          ),
+          SelectedContext,
+          PrefetchHooks Function()
+        > {
+  $$SelectedContextsTableTableManager(
+    _$AppDatabase db,
+    $SelectedContextsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SelectedContextsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SelectedContextsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SelectedContextsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> scope = const Value.absent(),
+                Value<String> sectorId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SelectedContextsCompanion(
+                scope: scope,
+                sectorId: sectorId,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String scope,
+                required String sectorId,
+                Value<int> rowid = const Value.absent(),
+              }) => SelectedContextsCompanion.insert(
+                scope: scope,
+                sectorId: sectorId,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$SelectedContextsTable, SelectedContext>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $SelectedContextsTable,
+                    SelectedContext
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SelectedContextsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SelectedContextsTable,
+      SelectedContext,
+      $$SelectedContextsTableFilterComposer,
+      $$SelectedContextsTableOrderingComposer,
+      $$SelectedContextsTableAnnotationComposer,
+      $$SelectedContextsTableCreateCompanionBuilder,
+      $$SelectedContextsTableUpdateCompanionBuilder,
+      (
+        SelectedContext,
+        BaseReferences<_$AppDatabase, $SelectedContextsTable, SelectedContext>,
+      ),
+      SelectedContext,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -2121,4 +2499,6 @@ class $AppDatabaseManager {
       $$BootstrapCachesTableTableManager(_db, _db.bootstrapCaches);
   $$OutboxEventsTableTableManager get outboxEvents =>
       $$OutboxEventsTableTableManager(_db, _db.outboxEvents);
+  $$SelectedContextsTableTableManager get selectedContexts =>
+      $$SelectedContextsTableTableManager(_db, _db.selectedContexts);
 }

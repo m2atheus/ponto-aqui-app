@@ -491,6 +491,21 @@ class FuncionarioRelogioSyncDto {
   };
 }
 
+class SetorDisponivelSyncDto {
+  const SetorDisponivelSyncDto({required this.id, required this.nome});
+  final String id, nome;
+
+  factory SetorDisponivelSyncDto.fromJson(Object? value) {
+    final json = _objeto(value, 'setor disponivel');
+    return SetorDisponivelSyncDto(
+      id: _uuid(json['id'], 'setores_disponiveis.id'),
+      nome: _texto(json['nome'], 'setores_disponiveis.nome'),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {'id': id, 'nome': nome};
+}
+
 class MobileSyncDto {
   const MobileSyncDto({
     required this.serverTimestamp,
@@ -506,6 +521,7 @@ class MobileSyncDto {
     required this.marcacoesRecentes,
     required this.escalas,
     required this.funcionarios,
+    this.setoresDisponiveis = const [],
   });
 
   final DateTime serverTimestamp;
@@ -521,6 +537,7 @@ class MobileSyncDto {
   final List<MarcacaoRecenteDto> marcacoesRecentes;
   final List<EscalaSyncDto> escalas;
   final List<FuncionarioRelogioSyncDto> funcionarios;
+  final List<SetorDisponivelSyncDto> setoresDisponiveis;
 
   factory MobileSyncDto.fromJson(Object? value) {
     final json = _objeto(value, 'sync');
@@ -544,8 +561,15 @@ class MobileSyncDto {
     final requiredLists = modo == ModoOperacao.pessoal
         ? ['alocacoes', 'marcacoes_recentes']
         : ['funcionarios', 'escalas'];
-    if (requiredLists.any((key) => json[key] is! List)) {
-      throw const FormatException('Carga incompleta.');
+    for (final key in requiredLists) {
+      if (json[key] is! List) {
+        throw FormatException('$key deve ser uma lista na carga deste modo.');
+      }
+    }
+    if (modo == ModoOperacao.relogio &&
+        json.containsKey('setores_disponiveis') &&
+        json['setores_disponiveis'] is! List) {
+      throw const FormatException('setores_disponiveis deve ser uma lista.');
     }
     final dto = MobileSyncDto(
       serverTimestamp: parseTimestampUtc(json['server_timestamp']),
@@ -554,28 +578,54 @@ class MobileSyncDto {
       modoOperacao: modo,
       status: _texto(json['status'], 'status'),
       mensagemStatus: _texto(json['mensagem_status'], 'mensagem_status'),
-      funcionario: _opcional(json['funcionario'], FuncionarioSyncDto.fromJson),
+      funcionario: modo == ModoOperacao.pessoal
+          ? _opcional(json['funcionario'], FuncionarioSyncDto.fromJson)
+          : null,
       setor: _opcional(json['setor'], SetorSyncDto.fromJson),
-      escala: _opcional(json['escala'], EscalaSyncDto.fromJson),
-      alocacoes: _lista(
-        json['alocacoes'],
-        'alocacoes',
-        AlocacaoPessoalSyncDto.fromJson,
-      ),
-      marcacoesRecentes: _lista(
-        json['marcacoes_recentes'],
-        'marcacoes_recentes',
-        MarcacaoRecenteDto.fromJson,
-      ),
-      escalas: _lista(json['escalas'], 'escalas', EscalaSyncDto.fromJson),
-      funcionarios: _lista(
-        json['funcionarios'],
-        'funcionarios',
-        FuncionarioRelogioSyncDto.fromJson,
-      ),
+      escala: modo == ModoOperacao.pessoal
+          ? _opcional(json['escala'], EscalaSyncDto.fromJson)
+          : null,
+      alocacoes: modo == ModoOperacao.pessoal
+          ? _lista(
+              json['alocacoes'],
+              'alocacoes',
+              AlocacaoPessoalSyncDto.fromJson,
+            )
+          : const [],
+      marcacoesRecentes: modo == ModoOperacao.pessoal
+          ? _lista(
+              json['marcacoes_recentes'],
+              'marcacoes_recentes',
+              MarcacaoRecenteDto.fromJson,
+            )
+          : const [],
+      escalas: modo == ModoOperacao.relogio
+          ? _lista(json['escalas'], 'escalas', EscalaSyncDto.fromJson)
+          : const [],
+      funcionarios: modo == ModoOperacao.relogio
+          ? _lista(
+              json['funcionarios'],
+              'funcionarios',
+              FuncionarioRelogioSyncDto.fromJson,
+            )
+          : const [],
+      setoresDisponiveis: modo == ModoOperacao.relogio
+          ? _lista(
+              json['setores_disponiveis'],
+              'setores_disponiveis',
+              SetorDisponivelSyncDto.fromJson,
+            )
+          : const [],
     );
     if (modo == ModoOperacao.relogio) {
       if (dto.setor == null) throw const FormatException('Relógio sem setor.');
+      final sectorIds = dto.setoresDisponiveis.map((v) => v.id).toSet();
+      if (sectorIds.length != dto.setoresDisponiveis.length ||
+          (sectorIds.isNotEmpty && !sectorIds.contains(dto.setor!.id))) {
+        throw const FormatException(
+          'Catálogo de setores inconsistente com o setor do relógio.',
+        );
+      }
       final ids = dto.escalas.map((v) => v.id).toSet();
       if (dto.funcionarios
           .expand((v) => v.alocacoes)
@@ -638,6 +688,7 @@ class MobileSyncDto {
     } else ...{
       'escalas': escalas.map((v) => v.toJson()).toList(),
       'funcionarios': funcionarios.map((v) => v.toJson()).toList(),
+      'setores_disponiveis': setoresDisponiveis.map((v) => v.toJson()).toList(),
     },
   };
 }

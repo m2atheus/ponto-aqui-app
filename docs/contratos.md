@@ -5,7 +5,7 @@ Não houve alteração de backend, execução de migration ou contato com banco 
 
 | Operação | Caminho | Body | Sucesso |
 | --- | --- | --- | --- |
-| Login | POST `/api/mobile/auth/login` | email, senha, dispositivo_id | 200: access_token, token_type, usuario |
+| Login | POST `/api/mobile/auth/login` | email, senha, device_uuid; setor_id opcional | 200: access_token, token_type, usuario |
 | Perfil | GET `/api/mobile/auth/me` | nenhum | 200: usuario |
 | Carga | GET `/api/v1/mobile/sync` | nenhum | 200: DTO pessoal/relógio |
 | Lote | POST `/api/mobile/marcacoes/lote` | marcacoes: array W09 | 200/207: resultados |
@@ -16,9 +16,12 @@ nessas operações, mas somente W08 exige esse header no middleware atual.
 Não há prefixo `/api/v1` global. O cliente não segue redirects e rejeita requests
 a outra origem antes de enviar o token.
 
-O login aceita `dispositivo_id` previamente registrado, não `device_uuid` ou nome
-do aparelho. `sub` é `Usuarios.id`; `Funcionarios.id` tem identidade distinta.
-O UUID da instalação também difere da PK de `Dispositivos`.
+O login mobile usa `device_uuid` estável da instalação; a API também mantém
+compatibilidade com `dispositivo_id` legado. O app não solicita a PK ao usuário.
+O ID interno usado nos eventos vem do JWT emitido pelo servidor, conferido junto
+à instalação e ao perfil e validado por `/me` antes de salvar a sessão. A leitura
+local de metadados não substitui a validação da assinatura pelo backend.
+`sub` é `Usuarios.id`; `Funcionarios.id` e a PK de `Dispositivos` são distintos.
 
 O DTO W08 é baseado no Dart portátil existente no painel, acrescido de validação
 de listas obrigatórias, status, duração de turnos e referências de ciclos. O
@@ -46,12 +49,9 @@ Diferenças documentais encontradas:
 - Bootstrap filtra vigência civil atual. Sua presença não garante que o vínculo
   tenha `usuario_id` compatível com o autorizador W09; o erro remoto é preservado.
 
-Para automatizar provisionamento, será necessário apresentar e aprovar uma
-extensão mobile que valide senha, registre/revogue aparelho com o Service W07 e
-retorne a identidade do dispositivo antes de emitir JWT. A decisão precisa
-contemplar filas antigas e selfies de aparelhos revogados. Nada disso é simulado
-no cliente atual.
-
+O provisionamento e a conversão de aparelhos ficam no Web Admin do RH.
+O app compartilha o UUID, autentica cada funcionário e usa seus vínculos atuais.
+Não chama rotas administrativas nem cadastra UUID desconhecido automaticamente.
 
 ## Selfie por presença no local vinculado
 
@@ -82,3 +82,54 @@ selfie não converte ponto recusado por política de bloqueio em ponto aceito.
 Não houve alteração de rotas, migrations, cadastros ou políticas do banco nesta
 implementação. Uma regra obrigatória também para outros clientes precisará ser
 implementada no servidor.
+
+
+## Compatibilidade RELOGIO e diagnóstico de parsing
+
+O backend atual permite `FUNCIONARIO` em aparelho `RELOGIO` com vínculo ativo.
+O modo da carga é derivado do aparelho autorizado e não pode ser inferido somente
+pelo papel da conta. O app aceita essa combinação; contas `USUARIO_SETOR`
+continuam restritas a RELOGIO e contas administrativas continuam rejeitadas.
+
+O DTO separa os campos de cada modo. Em RELOGIO são interpretados `setor`,
+`funcionarios`, `escalas` e `setores_disponiveis` (catálogo de `id`/`nome`), sem
+exigir campos pessoais. O catálogo sobrevive à serialização do cache e não
+habilita por si só troca de setor nem envio coletivo. Cargas legadas sem catálogo
+continuam legíveis.
+
+Falhas de parsing de API/cache registram mensagem da exceção e stack trace com
+credenciais removidas. O JSON completo e `FormatException.source` não são
+impressos. O prefixo no console é `[bootstrap.parse]`; o logger do DevTools é
+`ponto_aqui.bootstrap`. A carga válida anterior permanece preservada.
+
+Veja [a reprodução e os critérios de validação](diagnostico-bootstrap-2026-11-03.md).
+
+
+## Integração compartilhada multissetor
+
+`BootstrapSnapshot.employeeFor` identifica a própria pessoa por `usuario_id`;
+`allocationsFor` projeta apenas suas alocações e resolve `escala_id` no catálogo
+comum. Nunca escolhe o primeiro funcionário nem concede acesso pelo catálogo.
+No relógio, o setor e as políticas vêm da carga do setor selecionado; o catálogo
+resumido de outros setores não fornece geofence. PESSOAL mantém múltiplas alocações.
+
+A seleção usa `GET /api/v1/mobile/sync?setor_id=...`, mantém o JWT e persiste em
+`selected_contexts`. O cache do relógio acrescenta o setor ao escopo da identidade.
+Cargas v1 sem catálogo são lidas apenas se correspondem ao setor solicitado.
+Respostas de revisões anteriores de seleção/sessão não atualizam estado ou cache.
+Sem cache de B, falha ao carregar B não reaproveita as políticas de A.
+
+A outbox conserva o escopo original de API/empresa/usuário/instalação/aparelho;
+cada evento mantém seu `alocacao_id` no payload imutável e os novos registram setor
+nos metadados locais. O worker envia cada contexto original com o JWT da própria
+conta, sem anexar o setor atualmente selecionado ao lote ou à selfie. Isso mantém
+pendências de setores anteriores válidas para retry, sem reatribuição. Workers
+concorrentes de contas distintas não reutilizam JWT nem filas de outra identidade.
+
+A migração SQLite v1 para v2 somente cria a tabela de seleção. Não apaga ou altera
+pontos, fotos, caches anteriores nem o trigger de imutabilidade. `401` e `403`,
+incluindo `DISPOSITIVO_MODO_ALTERADO`, bloqueiam a sessão e solicitam login, sem
+tratar a recusa como offline. Rede/503 e parsing preservam a carga válida e a fila.
+
+Os testes da integração usam exclusivamente dados sintéticos e transporte HTTP
+simulado. Nenhum backend ou cadastro remoto foi alterado.

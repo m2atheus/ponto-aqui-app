@@ -204,8 +204,8 @@ void main() {
             expect(interval.top, closeTo(entry.top, .01));
           }
         } else {
-          expect(find.text('Ana Silva'), findsOneWidget);
-          expect(find.byType(FilledButton), findsNothing);
+          expect(find.text('Você: Ana Silva'), findsOneWidget);
+          expect(find.byType(FilledButton), findsNWidgets(4));
         }
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox.shrink());

@@ -21,7 +21,7 @@ class SyncWorker {
   final MobileApi api;
   final DateTime Function() now;
   final Random random;
-  Future<void>? _running;
+  final _running = <String, Future<void>>{};
   final String _owner = const Uuid().v4();
 
   Future<void> run(
@@ -30,10 +30,11 @@ class SyncWorker {
     required Future<void> Function(AppFailure) onDenied,
     bool manual = false,
   }) {
-    if (_running != null) return _running!;
+    final existing = _running[session.scope];
+    if (existing != null) return existing;
     final future = _run(session, authorized, onDenied, manual);
-    _running = future;
-    return future.whenComplete(() => _running = null);
+    _running[session.scope] = future;
+    return future.whenComplete(() => _running.remove(session.scope));
   }
 
   DateTime _retry(int attempts) {

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:image/image.dart' as img;
@@ -40,9 +41,14 @@ class WidgetSensors implements EvidenceSensors {
 
 void main() {
   setUpAll(tz.initializeTimeZones);
-  for (final outside in [false, true]) {
+  for (final scenario in [
+    (outside: false, shared: false),
+    (outside: true, shared: false),
+    (outside: false, shared: true),
+  ]) {
+    final outside = scenario.outside;
     testWidgets(
-      'personal flow ${outside ? 'outside with required selfie' : 'inside without selfie'} persists before transport',
+      '${scenario.shared ? 'shared own account' : 'personal'} flow ${outside ? 'outside with required selfie' : 'inside without selfie'} persists before transport',
       (tester) async {
         final db = AppDatabase(NativeDatabase.memory());
         addTearDown(db.close);
@@ -53,14 +59,27 @@ void main() {
         addTearDown(() => photoDirectory.deleteSync(recursive: true));
         final signals = FakeConnections();
         addTearDown(signals.controller.close);
-        final body = fixture();
+        final body = fixture(scenario.shared ? 'relogio' : 'pessoal');
+        if (scenario.shared) {
+          final unlinked = jsonDecode(jsonEncode(body['funcionarios'][0]));
+          unlinked['id'] = '77777777-7777-4777-8777-777777777777';
+          unlinked['usuario_id'] = null;
+          unlinked['nome'] = 'Outra pessoa sem conta';
+          body['funcionarios'].insert(0, unlinked);
+          body['setores_disponiveis'] = [
+            {'id': body['setor']['id'], 'nome': body['setor']['nome']},
+          ];
+        }
         final now = DateTime.now().toUtc();
         body['server_timestamp'] = now.toIso8601String();
         body['data_referencia'] = ClockSample.civilDate(
           now,
           body['fuso_horario'] as String,
         );
-        for (final sector in [body['setor'], body['alocacoes'][0]['setor']]) {
+        for (final sector in [
+          body['setor'],
+          if (!scenario.shared) body['alocacoes'][0]['setor'],
+        ]) {
           sector['politicas']['ignorar_localizacao'] = true;
         }
         final adapter = FakeAdapter((request) {
@@ -109,7 +128,14 @@ void main() {
           }
         });
         await tester.pumpAndSettle();
-        expect(find.text('Olá, Ana'), findsOneWidget);
+        expect(
+          find.text(scenario.shared ? 'Relógio de setor' : 'Olá, Ana'),
+          findsOneWidget,
+        );
+        if (scenario.shared) {
+          expect(find.text('Outra pessoa sem conta'), findsNothing);
+          expect(find.text('Setor de trabalho'), findsOneWidget);
+        }
         await tester.ensureVisible(find.text('Entrada'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('Entrada'));
@@ -199,7 +225,8 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('Sua jornada começa aqui.'), findsOneWidget);
-      expect(find.text('ID cadastrado do aparelho'), findsOneWidget);
+      expect(find.text('ID cadastrado do aparelho'), findsNothing);
+      expect(find.text('Copiar identificador'), findsOneWidget);
       expect(find.text('Entrar'), findsOneWidget);
       await tester.ensureVisible(find.text('Entrar'));
       await tester.pumpAndSettle();

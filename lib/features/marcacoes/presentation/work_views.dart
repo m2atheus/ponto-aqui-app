@@ -227,7 +227,11 @@ class HomeView extends ConsumerWidget {
     final state = ref.watch(workProvider(session.scope));
     final snapshot = state.snapshot;
     final shared = snapshot?.data.modoOperacao == ModoOperacao.relogio;
-    final restriction = snapshot?.captureRestriction(DateTime.now().toUtc());
+    final restriction = snapshot?.captureRestriction(
+      DateTime.now().toUtc(),
+      userId: session.userId,
+      role: session.role,
+    );
     final colors = Theme.of(context).colorScheme;
     final clock = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -257,17 +261,17 @@ class HomeView extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           spacing: 16,
           children: [
+            const _SectorPicker(),
             if (state.message != null) _Notice(state.message!),
             if (snapshot == null)
               const _Notice(
-                'A primeira carga válida exige internet e aparelho autorizado. Toque em atualizar após o provisionamento.',
+                'Atualize a carga deste contexto antes de registrar. O primeiro acesso a um setor exige internet e autorização do aparelho.',
               ),
-            if (restriction != null && !shared) _Notice(restriction),
-            if (shared)
-              _ClockMode(snapshot: snapshot!)
-            else if (snapshot != null)
+            if (restriction != null) _Notice(restriction),
+            if (snapshot != null)
               _PersonalPanel(
                 snapshot: snapshot,
+                userId: session.userId,
                 tablet: tablet,
                 onRegister: restriction == null && session.canSend
                     ? (type) => context.go('/registrar?tipo=${type.wire}')
@@ -310,11 +314,13 @@ class HomeView extends ConsumerWidget {
 class _PersonalPanel extends StatelessWidget {
   const _PersonalPanel({
     required this.snapshot,
+    required this.userId,
     required this.tablet,
     this.onRegister,
   });
   final BootstrapSnapshot snapshot;
   final bool tablet;
+  final String userId;
   final ValueChanged<PunchType>? onRegister;
 
   @override
@@ -329,13 +335,15 @@ class _PersonalPanel extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             spacing: 12,
             children: [
+              if (snapshot.employeeFor(userId) case final employee?)
+                Text('Você: ${employee.nome}'),
               Text(
                 'Seus vínculos',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
-              if (snapshot.data.alocacoes.isEmpty)
+              if (snapshot.allocationsFor(userId).isEmpty)
                 Text(snapshot.data.mensagemStatus),
-              for (final allocation in snapshot.data.alocacoes)
+              for (final allocation in snapshot.allocationsFor(userId))
                 Row(
                   children: [
                     Icon(
@@ -504,12 +512,17 @@ class _CaptureViewState extends ConsumerState<CaptureView> {
     if (session == null) return const SizedBox.shrink();
     final state = ref.watch(workProvider(session.scope));
     final snapshot = state.snapshot;
-    final allocations = snapshot?.data.alocacoes ?? <AlocacaoPessoalSyncDto>[];
+    final allocations =
+        snapshot?.allocationsFor(session.userId) ?? <AlocacaoPessoalSyncDto>[];
     final selected =
         allocations.where((a) => a.id == _allocation).firstOrNull ??
         (allocations.length == 1 ? allocations.single : null);
     final restriction =
-        snapshot?.captureRestriction(DateTime.now().toUtc()) ??
+        snapshot?.captureRestriction(
+          DateTime.now().toUtc(),
+          userId: session.userId,
+          role: session.role,
+        ) ??
         (snapshot == null ? 'Atualize os dados antes de registrar.' : null);
     return _Page(
       children: [
@@ -517,9 +530,13 @@ class _CaptureViewState extends ConsumerState<CaptureView> {
           'Registrar ponto',
           style: Theme.of(context).textTheme.headlineMedium,
         ),
+        const _SectorPicker(),
         if (restriction != null) _Notice(restriction),
         if (state.message != null) _Notice(state.message!),
         DropdownButtonFormField<String>(
+          key: ValueKey(
+            'allocation:${session.scope}:${state.selectedSectorId}',
+          ),
           initialValue: selected?.id,
           isExpanded: true,
           decoration: const InputDecoration(labelText: 'Vínculo de trabalho'),
@@ -527,7 +544,10 @@ class _CaptureViewState extends ConsumerState<CaptureView> {
               .map(
                 (a) => DropdownMenuItem(
                   value: a.id,
-                  child: Text(a.setor.nome, overflow: TextOverflow.ellipsis),
+                  child: Text(
+                    '${a.setor.nome} · ${a.escala?.nome ?? 'Sem escala'}',
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               )
               .toList(),
@@ -781,6 +801,8 @@ class _EventCard extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Text(title),
+            if (metadata['setor_nome'] is String)
+              Text('Setor da marcação: ${metadata['setor_nome']}'),
             if (receipt != null && (receipt['motivos'] as List).isNotEmpty)
               Text((receipt['motivos'] as List).join(', ')),
             if (row.photoTransport != 'sem_foto')
@@ -850,7 +872,7 @@ class ScheduleView extends ConsumerWidget {
           Text(
             'Carga: ${snapshot.data.dataReferencia} · ${snapshot.data.fusoHorario}',
           ),
-          for (final allocation in snapshot.data.alocacoes)
+          for (final allocation in snapshot.allocationsFor(session.userId))
             _AllocationSchedule(allocation: allocation, snapshot: snapshot),
         ],
       ],
@@ -916,59 +938,41 @@ class _AllocationSchedule extends StatelessWidget {
   }
 }
 
-class _ClockMode extends StatelessWidget {
-  const _ClockMode({required this.snapshot});
-  final BootstrapSnapshot snapshot;
+class _SectorPicker extends ConsumerWidget {
+  const _SectorPicker();
   @override
-  Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            snapshot.data.setor?.nome ?? 'Relógio de setor',
-            style: Theme.of(context).textTheme.titleLarge,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final session = ref.watch(authProvider).asData?.value;
+    if (session == null) return const SizedBox.shrink();
+    final state = ref.watch(workProvider(session.scope));
+    if (state.sectors.isEmpty) return const SizedBox.shrink();
+    final selected = state.sectors.any((s) => s.id == state.selectedSectorId)
+        ? state.selectedSectorId
+        : null;
+    return DropdownButtonFormField<String>(
+      key: ValueKey('sector:${session.scope}:$selected'),
+      initialValue: selected,
+      isExpanded: true,
+      decoration: const InputDecoration(labelText: 'Setor de trabalho'),
+      items: [
+        for (final sector in state.sectors)
+          DropdownMenuItem(
+            value: sector.id,
+            child: Text(sector.nome, overflow: TextOverflow.ellipsis),
           ),
-          const SizedBox(height: 12),
-          const Text(
-            'A carga do setor está disponível. Registrar pontos da equipe depende de autorização adicional no servidor.',
-          ),
-          const SizedBox(height: 16),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final columns =
-                  constraints.maxWidth >= 440 &&
-                      MediaQuery.textScalerOf(context).scale(16) <= 24
-                  ? 2
-                  : 1;
-              return Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  for (final employee in snapshot.data.funcionarios)
-                    SizedBox(
-                      width:
-                          (constraints.maxWidth - 12 * (columns - 1)) / columns,
-                      child: Card(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .surfaceContainerHigh,
-                        child: ListTile(
-                          leading: const Icon(Icons.person_outline),
-                          title: Text(employee.funcionario.nome),
-                          subtitle: Text(
-                            'Matrícula ${employee.funcionario.matricula}',
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              );
+      ],
+      onChanged:
+          state.capturing || !session.canSend || state.sectors.length == 1
+          ? null
+          : (id) {
+              if (id != null) {
+                unawaited(
+                  ref
+                      .read(workProvider(session.scope).notifier)
+                      .selectSector(id),
+                );
+              }
             },
-          ),
-        ],
-      ),
-    ),
-  );
+    );
+  }
 }

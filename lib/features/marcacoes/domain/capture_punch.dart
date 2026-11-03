@@ -44,12 +44,17 @@ class CapturePunch {
             'A sessão mudou. Entre novamente antes de registrar.',
           );
         }
-        final restriction = snapshot.captureRestriction(now().toUtc());
+        final restriction = snapshot.captureRestriction(
+          now().toUtc(),
+          userId: session.userId,
+          role: session.role,
+        );
         if (restriction != null) throw AppFailure(restriction);
       }
 
       validate();
-      final allocations = snapshot.data.alocacoes
+      final ownAllocations = snapshot.allocationsFor(session.userId);
+      final allocations = ownAllocations
           .where((a) => a.id == allocationId)
           .toList();
       if (allocations.length != 1) {
@@ -64,7 +69,7 @@ class CapturePunch {
       validate();
       final selfie = SelfieRequirement.evaluate(
         location: location,
-        workplaces: snapshot.data.alocacoes
+        workplaces: ownAllocations
             .where(
               (a) =>
                   a.dataInicio.compareTo(snapshot.data.dataReferencia) <= 0 &&
@@ -127,6 +132,10 @@ class CapturePunch {
           'posicao': location.position,
         },
         metadata: {
+          'setor_id': allocation.setor.id,
+          'setor_nome': allocation.setor.nome,
+          'alocacao_id': allocation.id,
+          'modo_operacao': snapshot.data.modoOperacao.name,
           'localizacao_status': location.status,
           'presenca_local_vinculado': selfie.presence,
           'selfie_obrigatoria': selfie.required,

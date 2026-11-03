@@ -11,10 +11,10 @@ class AuthViewModel extends AsyncNotifier<MobileSession?> {
   @override
   Future<MobileSession?> build() => ref.read(runtimeProvider).auth.restore();
 
-  Future<void> login(String email, String password, String deviceId) async {
+  Future<void> login(String email, String password) async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(
-      () => ref.read(runtimeProvider).auth.login(email, password, deviceId),
+      () => ref.read(runtimeProvider).auth.login(email, password),
     );
   }
 

@@ -43,6 +43,7 @@ class MobileApi {
     String path, {
     MobileSession? session,
     Object? data,
+    Map<String, dynamic>? queryParameters,
   }) async {
     if (session != null && session.origin != config.origin) {
       throw const AppFailure('A sessão pertence a outra API.');
@@ -51,6 +52,7 @@ class MobileApi {
       final response = await _dio.request<Object?>(
         path,
         data: data,
+        queryParameters: queryParameters,
         options: Options(
           method: method,
           headers: {

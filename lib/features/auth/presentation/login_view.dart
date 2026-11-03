@@ -16,14 +16,12 @@ class LoginView extends ConsumerStatefulWidget {
 class _LoginViewState extends ConsumerState<LoginView> {
   final _email = TextEditingController();
   final _password = TextEditingController();
-  final _device = TextEditingController();
   final _form = GlobalKey<FormState>();
   bool _hide = true;
   @override
   void dispose() {
     _email.dispose();
     _password.dispose();
-    _device.dispose();
     super.dispose();
   }
 
@@ -117,22 +115,6 @@ class _LoginViewState extends ConsumerState<LoginView> {
                             ? 'Informe sua senha.'
                             : null,
                       ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _device,
-                        autocorrect: false,
-                        enableSuggestions: false,
-                        decoration: const InputDecoration(
-                          labelText: 'ID cadastrado do aparelho',
-                          helperText: 'Solicite este ID ao administrador.',
-                          helperMaxLines: 2,
-                          prefixIcon: Icon(Icons.phonelink_lock_outlined),
-                        ),
-                        validator: (value) =>
-                            value == null || value.trim().isEmpty
-                            ? 'Informe o ID fornecido pela empresa.'
-                            : null,
-                      ),
                       const SizedBox(height: 24),
                       FilledButton(
                         onPressed: auth.isLoading
@@ -144,11 +126,7 @@ class _LoginViewState extends ConsumerState<LoginView> {
                                 _password.clear();
                                 await ref
                                     .read(authProvider.notifier)
-                                    .login(
-                                      _email.text,
-                                      password,
-                                      _device.text.trim(),
-                                    );
+                                    .login(_email.text, password);
                               },
                         child: const Text('Entrar'),
                       ),

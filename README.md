@@ -55,24 +55,29 @@ ações a partir de 600. Os botões pessoais ocupam a largura disponível no cel
 no tablet, podem formar duas colunas no painel lateral. Fonte ampliada reduz a
 quantidade de colunas e a página continua rolável em telas baixas. A escolha de
 Entrada, Saída ou Intervalo abre a confirmação do tipo correspondente. O modo
-Relógio mantém seu catálogo de funcionários, sem simular envio coletivo ausente
-no backend.
+Relógio mostra os vínculos do funcionário autenticado no setor escolhido. Nenhum
+funcionário registra ponto em nome de outra pessoa.
 
 ## Primeiro acesso real
 
-1. O RH cria/vincula a conta de funcionário no backend.
-2. Abra o app e copie o identificador da instalação mostrado no login.
-3. Um operador confiável cadastra um dispositivo pessoal ativo na empresa/conta,
-   usando esse identificador em `device_uuid`.
-4. O operador fornece o **ID da linha do dispositivo** (`dispositivo_id`).
-5. Entre com e-mail, senha e esse ID. O login envia somente os campos existentes.
-6. A primeira carga exige rede e valida o UUID da instalação contra o aparelho
-   autorizado pelo JWT. Um ID legado sozinho não basta quando o UUID diverge.
+1. O RH cria/vincula a conta de funcionário no Web Admin.
+2. Abra o app e copie o UUID estável da instalação mostrado no login.
+3. O RH autoriza esse aparelho para o funcionário e seus setores no Web Admin.
+4. Entre no app com e-mail e senha. O app envia `device_uuid` automaticamente;
+   não pede o ID interno do aparelho. O setor não é obrigatório no primeiro login.
+5. A API emite o JWT; o app lê o `dispositivo_id` interno e confere os metadados
+   contra a instalação/perfil, validando `/me` antes de persistir a sessão.
+6. Com vários setores autorizados, escolha **Setor de trabalho**. A carga usa
+   `sync?setor_id=...` sem trocar JWT. A escolha é persistida por conta/aparelho;
+   o primeiro acesso ao setor exige rede, e os próximos podem usar seu cache válido.
+7. No aparelho compartilhado, saia da conta antes do próximo funcionário entrar.
+   A sessão, os vínculos e os envios são sempre da pessoa autenticada.
 
-O aplicativo não cria aparelhos, tokens ou vínculos fictícios. O login atual
-não chama `registrar_login_pessoal`; cadastro/revogação automática ainda exige
-um contrato de backend aprovado e implementado. O código do servidor e o painel
-administrativo não foram modificados.
+O modo é determinado pelo aparelho autorizado: `FUNCIONARIO` pode receber
+PESSOAL ou RELOGIO; `USUARIO_SETOR` continua restrito ao relógio e não envia pontos
+por terceiros. O app não cadastra, converte ou reativa aparelhos, não fabrica
+claims e não implementa refresh fictício. Revogação/conversão recusada pela API
+solicita novo login, preservando evidências pendentes.
 
 ## Operação e políticas explícitas
 
@@ -88,11 +93,11 @@ local `http://127.0.0.1:5000` para criar funcionário/acesso/setor/escala/aloca�
 e mostra as credenciais da **nova** conta no terminal. Não salva senha RH nem JWT.
 O estado do processo, sem senhas/tokens, fica em `.local/usuario-teste-status.json`.
 
-Como a API ainda não tem provisionamento HTTP, o helper Python usa a factory e
-o Service de dispositivos do backend para vincular exclusivamente o novo usuário
-de teste, após validar o JWT emitido pelo login HTTP. Não aplica migrations,
-não cria contas administrativas e não revoga aparelhos de outros usuários.
-A carga mobile é verificada novamente pela API após esse vínculo.
+Esse utilitário legado de operação assistida fica fora do fluxo do aplicativo;
+seu helper usa o backend local para vincular exclusivamente a conta de teste.
+O fluxo normal usa a autorização manual do RH no Web Admin. Esses utilitários
+não foram executados nos testes da integração compartilhada, que usam somente
+HTTP simulado e SQLite de teste, sem credenciais ou banco remoto.
 
 Os recursos de teste têm nomes próprios, alocação por 30 dias, `exige_selfie=false`
 e localização ignorada pelo servidor somente no setor novo. A regra mobile de
@@ -167,7 +172,12 @@ autenticação, bootstrap, marcações, sincronização e escala. Views não exe
 Dio/SQL; ViewModels expõem estados e ações. Captura e sincronização coordenam
 repositórios e serviços testáveis.
 
-O Drift contém snapshots por escopo e a outbox. A evidência é separada dos campos
+O Drift contém snapshots por conta/aparelho/setor e a outbox por identidade.
+Cada evento da outbox conserva sua alocação original; os novos também guardam
+setor e nome em metadados locais imutáveis. Selecionar outro setor nunca reescreve
+um evento nem reassocia sua selfie. O schema v2 acrescenta somente a seleção de
+contexto: a migração preserva caches, eventos e referências aos arquivos de foto.
+ A evidência é separada dos campos
 de transporte, com trigger SQLite impedindo alterações de payload/metadados/
 arquivo após inserção. Confirmações de cada resposta são aplicadas em transação.
 
@@ -182,9 +192,10 @@ incrementar `schemaVersion`. Não apague o banco para resolver incompatibilidade
 
 ## Limites da API
 
-- O modo relógio exibe a carga quando há sessão de setor válida, mas não oferece
-  marcação coletiva nem saída autenticada por gestor: esses contratos não existem.
-- O login público atual não emite um token completo de setor.
+- O modo relógio permite ao funcionário registrar somente suas próprias alocações
+  no setor autorizado. Não oferece marcação coletiva nem funções administrativas.
+- O login usa UUID e recebe os identificadores/contextos do JWT emitido pela API;
+  autorização e revogação continuam sendo responsabilidade do backend.
 - Uma alocação encerrada no dia anterior pode não estar na carga atual mesmo
   havendo madrugada de turno. O app não inventa um vínculo para contornar isso.
 - O histórico é local mais os últimos 20 registros/7 dias da carga; não é um

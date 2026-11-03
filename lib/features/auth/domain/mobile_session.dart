@@ -12,11 +12,15 @@ class MobileSession {
     required this.deviceId,
     required this.deviceUuid,
     this.blockedReason,
+    this.initialSectorId,
+    this.authorizedSectorIds = const [],
   });
 
   final String origin, token, userId, companyId, name, email, role;
   final String deviceId, deviceUuid;
   final String? blockedReason;
+  final String? initialSectorId;
+  final List<String> authorizedSectorIds;
   String get scope =>
       jsonEncode([origin, companyId, userId, deviceUuid, deviceId]);
   bool get canSend => blockedReason == null;
@@ -32,6 +36,8 @@ class MobileSession {
     deviceId: deviceId,
     deviceUuid: deviceUuid,
     blockedReason: message,
+    initialSectorId: initialSectorId,
+    authorizedSectorIds: authorizedSectorIds,
   );
 
   Map<String, dynamic> toJson() => {
@@ -45,6 +51,8 @@ class MobileSession {
     'deviceId': deviceId,
     'deviceUuid': deviceUuid,
     'blockedReason': blockedReason,
+    'initialSectorId': initialSectorId,
+    'authorizedSectorIds': authorizedSectorIds,
   };
 
   factory MobileSession.fromJson(Map<String, dynamic> j) => MobileSession(
@@ -58,5 +66,9 @@ class MobileSession {
     deviceId: j['deviceId'] as String,
     deviceUuid: j['deviceUuid'] as String,
     blockedReason: j['blockedReason'] as String?,
+    initialSectorId: j['initialSectorId'] as String?,
+    authorizedSectorIds: List<String>.unmodifiable(
+      (j['authorizedSectorIds'] as List? ?? []).cast<String>(),
+    ),
   );
 }
