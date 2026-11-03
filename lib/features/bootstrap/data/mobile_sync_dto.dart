@@ -420,6 +420,9 @@ class MarcacaoRecenteDto {
     required this.ocorridoEm,
     required this.recebidoEm,
     required this.motivos,
+    this.invalidado,
+    this.aprovadoGestor,
+    this.reaprovadoRh,
   });
   final String id;
   final String eventoClienteId;
@@ -428,6 +431,16 @@ class MarcacaoRecenteDto {
   final DateTime ocorridoEm;
   final DateTime recebidoEm;
   final List<String> motivos;
+  // Ausencia nao significa reprovacao: APIs antigas nao enviam decisoes do RH.
+  final bool? invalidado, aprovadoGestor, reaprovadoRh;
+
+  String? get decisaoRh => invalidado == true
+      ? 'Invalidada pelo Gestor/RH'
+      : reaprovadoRh == true
+      ? 'Reaprovada pelo RH'
+      : aprovadoGestor == true
+      ? 'Aprovada pelo Gestor/RH'
+      : null;
 
   factory MarcacaoRecenteDto.fromJson(Object? value) {
     final json = _objeto(value, 'MarcacaoRecenteDto');
@@ -448,8 +461,27 @@ class MarcacaoRecenteDto {
       ocorridoEm: parseTimestampUtc(json['ocorrido_em']),
       recebidoEm: parseTimestampUtc(json['recebido_em']),
       motivos: _lista(json['motivos'], 'motivos', (v) => _texto(v, 'motivo')),
+      invalidado: _opcional(
+        json['invalidado'],
+        (v) => _booleano(v, 'invalidado'),
+      ),
+      aprovadoGestor: _opcional(
+        json['aprovado_gestor'],
+        (v) => _booleano(v, 'aprovado_gestor'),
+      ),
+      reaprovadoRh: _opcional(
+        json['reaprovado_rh'],
+        (v) => _booleano(v, 'reaprovado_rh'),
+      ),
     );
 
+    if ((dto.invalidado == true &&
+            (dto.aprovadoGestor == true || dto.reaprovadoRh == true)) ||
+        (dto.reaprovadoRh == true && dto.aprovadoGestor != true)) {
+      throw const FormatException(
+        'Decisao de gestao inconsistente na marcacao.',
+      );
+    }
     return dto;
   }
 
@@ -461,6 +493,9 @@ class MarcacaoRecenteDto {
     'ocorrido_em': ocorridoEm.toUtc().toIso8601String(),
     'recebido_em': recebidoEm.toUtc().toIso8601String(),
     'motivos': motivos,
+    if (invalidado != null) 'invalidado': invalidado,
+    if (aprovadoGestor != null) 'aprovado_gestor': aprovadoGestor,
+    if (reaprovadoRh != null) 'reaprovado_rh': reaprovadoRh,
   };
 }
 

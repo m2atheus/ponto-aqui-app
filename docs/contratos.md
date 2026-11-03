@@ -133,3 +133,36 @@ tratar a recusa como offline. Rede/503 e parsing preservam a carga válida e a f
 
 Os testes da integração usam exclusivamente dados sintéticos e transporte HTTP
 simulado. Nenhum backend ou cadastro remoto foi alterado.
+
+
+## Histórico: validação original e decisão do RH
+
+`resultados[].situacao` (recibo de envio) e `marcacoes_recentes[].situacao`
+(carga mobile atual) descrevem a validação automática original. Uma aprovação ou
+invalidação no painel web é uma decisão auditada separadamente; não modifica o
+registro original. O app não interpreta `Recusada`/`FORA_DO_PERIMETRO` como a
+última decisão do gestor.
+
+Histórico e fila mostram o recebimento como `Sincronizado` e mantêm situação e
+motivos originais na seção `Validação automática original`. Sem decisão explícita,
+mostram `Decisão do RH não disponível`, inclusive para batidas originalmente
+aceitas. Não é uma indicação de aprovação, recusa ou análise pendente pelo RH.
+
+O DTO pode ler os campos opcionais `invalidado`, `aprovado_gestor` e
+`reaprovado_rh` por marcação, com os mesmos nomes usados pelo espelho web. Uma
+marcação remota complementa um recibo local somente se **ambos** `id` (igual a
+`registro_id`) e `evento_cliente_id` coincidirem, sem ambiguidade. O cache conserva
+esses campos quando fornecidos. Payload, recibo original e selfies da outbox não
+são reescritos. Dados exibidos refletem a última carga recebida, atualizada pelo
+comando de atualização ou ao retornar ao app.
+
+**Limitação atual:** o endpoint mobile consultado não entrega esses campos nem
+outra projeção das decisões do RH. RELOGIO também não entrega `marcacoes_recentes`.
+Assim, somente alterações no app corrigem a apresentação equivocada, mas não
+permitem mostrar as aprovações reais do painel. Isso depende de uma futura
+exposição autorizada dessa projeção pela API. Esta implementação não altera o
+backend, não consulta rotas administrativas e não infere decisões ausentes.
+
+Validação: `test/history_status_test.dart`, com HTTP simulado, SQLite em memória
+e widgets. Inclui três aprovações e uma invalidação sintéticas, associação por
+identificadores, dados sem decisão, duplicatas e preservação do recibo original.

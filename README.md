@@ -236,3 +236,22 @@ Referências: [Flutter/MVVM](https://docs.flutter.dev/app-architecture/guide),
 [Drift](https://drift.simonbinder.eu/dart_api/transactions/),
 [Riverpod](https://riverpod.dev/docs/introduction/getting_started),
 [pacotes e versões resolvidas](pubspec.lock).
+
+## Icone de instalacao
+
+A fonte oficial e `assets/brand/icon.png`. A configuracao `flutter_launcher_icons`
+no `pubspec.yaml` gera Android tradicional/adaptativo e o catalogo AppIcon do iOS.
+O adaptativo usa fundo branco; as imagens convencionais de iOS sao geradas sem
+canal alpha. A imagem-fonte original e preservada.
+
+Para regenerar no Windows, execute na raiz do projeto:
+
+```powershell
+flutter pub get
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/gerar_icones.ps1
+```
+
+O utilitario executa `flutter pub run flutter_launcher_icons` e preserva um ajuste
+booleano do Xcode que a versao 0.14.4 do gerador altera indevidamente. Depois,
+compile e atualize a instalacao. Hot reload nao atualiza os recursos do launcher.
+A geracao dos recursos iOS nao substitui a compilacao em macOS/Xcode.

@@ -75,7 +75,13 @@ class _WorkShellState extends ConsumerState<WorkShell>
       appBar: AppBar(
         title: Row(
           children: [
-            Image.asset('assets/brand/symbol.png', width: 32, height: 32),
+            Image.asset(
+              'assets/brand/icon.png',
+              width: 32,
+              height: 32,
+              fit: BoxFit.contain,
+              excludeFromSemantics: true,
+            ),
             const SizedBox(width: 10),
             const Flexible(
               child: Text(
@@ -692,7 +698,14 @@ class QueueView extends ConsumerWidget {
                     'Nenhuma marcação local neste aparelho para esta conta.',
                   ),
                 ]
-              : items.reversed.map((r) => _EventCard(row: r)).toList(),
+              : items.reversed
+                    .map(
+                      (r) => _EventCard(
+                        row: r,
+                        remote: _matchingRemote(r, state.snapshot),
+                      ),
+                    )
+                    .toList(),
           error: (_, _) => [
             const _Notice('Não foi possível ler a fila. Tente novamente.'),
           ],
@@ -724,22 +737,39 @@ class HistoryView extends ConsumerWidget {
           style: Theme.of(context).textTheme.headlineMedium,
         ),
         const Text(
-          'Histórico local e registros recentes da última carga. Este resumo não é o espelho mensal.',
+          'Sincronizado confirma o recebimento da batida. A decisão do RH é exibida quando estiver disponível na última atualização.',
         ),
         ...local.when(
-          data: (rows) => rows.map((r) => _EventCard(row: r)).toList(),
+          data: (rows) => rows
+              .map(
+                (r) => _EventCard(row: r, remote: _matchingRemote(r, snapshot)),
+              )
+              .toList(),
           loading: () => [const Center(child: CircularProgressIndicator())],
           error: (_, _) => [const _Notice('Histórico local indisponível.')],
         ),
         for (final event in remote)
           Card(
-            child: ListTile(
-              leading: const Icon(Icons.cloud_done_outlined),
-              title: Text(
-                '${_label(event.tipo)} · ${_situation(event.situacao)}',
-              ),
-              subtitle: Text(
-                '${_date(event.ocorridoEm.toLocal())} às ${_time(event.ocorridoEm.toLocal())}\n${event.motivos.join(', ')}',
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${_label(event.tipo)} · ${_date(event.ocorridoEm.toLocal())} ${_time(event.ocorridoEm.toLocal())}',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Sincronizado · ${event.decisaoRh ?? 'Decisão do RH não disponível'}',
+                  ),
+                  if (event.decisaoRh != null)
+                    const Text('Última decisão recebida na atualização.'),
+                  _InitialValidation(
+                    situation: event.situacao,
+                    reasons: event.motivos,
+                  ),
+                ],
               ),
             ),
           ),
@@ -759,9 +789,54 @@ String _situation(String value) => switch (value) {
   _ => value,
 };
 
+// A decisao recebida so pode complementar a propria batida confirmada.
+// Nao associar por posicao da lista, tipo ou horario.
+MarcacaoRecenteDto? _matchingRemote(
+  OutboxEvent row,
+  BootstrapSnapshot? snapshot,
+) {
+  if (row.transport != 'confirmada' ||
+      row.receipt == null ||
+      snapshot == null) {
+    return null;
+  }
+  final receipt = jsonDecode(row.receipt!) as Map<String, dynamic>;
+  final matches = snapshot.data.marcacoesRecentes
+      .where(
+        (event) =>
+            event.eventoClienteId == row.eventId &&
+            event.id == receipt['registro_id'],
+      )
+      .toList();
+  return matches.length == 1 ? matches.single : null;
+}
+
+class _InitialValidation extends StatelessWidget {
+  const _InitialValidation({required this.situation, required this.reasons});
+  final String situation;
+  final List<String> reasons;
+  @override
+  Widget build(BuildContext context) => ExpansionTile(
+    tilePadding: EdgeInsets.zero,
+    title: const Text(
+      'Validação automática original',
+      style: TextStyle(fontSize: 12),
+    ),
+    children: [
+      Align(
+        alignment: Alignment.centerLeft,
+        child: Text(_situation(situation)),
+      ),
+      if (reasons.isNotEmpty)
+        Align(alignment: Alignment.centerLeft, child: Text(reasons.join(', '))),
+    ],
+  );
+}
+
 class _EventCard extends StatelessWidget {
-  const _EventCard({required this.row});
+  const _EventCard({required this.row, this.remote});
   final OutboxEvent row;
+  final MarcacaoRecenteDto? remote;
   @override
   Widget build(BuildContext context) {
     final evidence = jsonDecode(row.payload) as Map<String, dynamic>;
@@ -773,7 +848,7 @@ class _EventCard extends StatelessWidget {
     final confirmed = row.transport == 'confirmada';
     final title = switch (row.transport) {
       'confirmada' =>
-        'Sincronizado · ${_situation(receipt?['situacao'] as String? ?? '')}',
+        'Sincronizado · ${remote?.decisaoRh ?? 'Decisão do RH não disponível'}',
       'enviando' => 'Enviando',
       'erro_requer_acao' => 'Requer ação',
       _ => 'Salvo no aparelho',
@@ -803,8 +878,14 @@ class _EventCard extends StatelessWidget {
             Text(title),
             if (metadata['setor_nome'] is String)
               Text('Setor da marcação: ${metadata['setor_nome']}'),
-            if (receipt != null && (receipt['motivos'] as List).isNotEmpty)
-              Text((receipt['motivos'] as List).join(', ')),
+            if (confirmed && remote?.decisaoRh != null)
+              const Text('Última decisão recebida na atualização.'),
+            if (confirmed && receipt != null)
+              _InitialValidation(
+                situation: receipt['situacao'] as String? ?? '',
+                reasons: ((receipt['motivos'] as List?) ?? const [])
+                    .cast<String>(),
+              ),
             if (row.photoTransport != 'sem_foto')
               Text(
                 'Selfie: ${switch (row.photoTransport) {
